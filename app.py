@@ -4,6 +4,9 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
+from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.figure import Figure
+
 from beam_analysis import BeamInput, PointLoad, UniformLoad, calculate_beam
 
 
@@ -96,6 +99,7 @@ class BeamDesignerApp(tk.Tk):
         file_menu.add_command(label="Open...", accelerator="Ctrl+O", command=self.open_project)
         file_menu.add_separator()
         file_menu.add_command(label="Export CSV...", command=self.export_csv)
+        file_menu.add_command(label="Export PDF...", command=self.export_pdf)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.destroy)
         menu_bar.add_cascade(label="File", menu=file_menu)
@@ -144,6 +148,9 @@ class BeamDesignerApp(tk.Tk):
         ttk.Button(actions, text="Add uniform load", command=lambda: self.add_uniform_load("1", "0", "")).pack(side="left")
         ttk.Button(self.inputs_frame, text="Export results to CSV", command=self.export_csv).grid(
             row=16, column=0, columnspan=2, sticky="ew", pady=(8, 0)
+        )
+        ttk.Button(self.inputs_frame, text="Export calculation sheet PDF", command=self.export_pdf).grid(
+            row=17, column=0, columnspan=2, sticky="ew", pady=(4, 0)
         )
 
         ttk.Label(
@@ -430,6 +437,145 @@ class BeamDesignerApp(tk.Tk):
                     ])
         except OSError as exc:
             messagebox.showerror("Export CSV", f"Could not export the CSV:\n{exc}")
+
+    def export_pdf(self):
+        if not self.result:
+            messagebox.showwarning("Export PDF", "Calculate a beam response before exporting.")
+            return
+        path = filedialog.asksaveasfilename(
+            defaultextension=".pdf",
+            filetypes=(("PDF file", "*.pdf"), ("All files", "*.*")),
+            title="Export Calculation Sheet",
+        )
+        if not path:
+            return
+
+        result = self.result
+        figure = Figure(figsize=(11, 8.5), dpi=100)
+        grid = figure.add_gridspec(
+            3,
+            2,
+            height_ratios=(0.8, 1.6, 1.6),
+            left=0.07,
+            right=0.97,
+            bottom=0.08,
+            top=0.93,
+            hspace=0.65,
+            wspace=0.25,
+        )
+
+        title_ax = figure.add_subplot(grid[0, :])
+        title_ax.axis("off")
+        bending_status = "PASS" if result.bending_passes else "FAIL"
+        deflection_status = "PASS" if result.deflection_passes else "FAIL"
+        title_ax.text(
+            0,
+            0.98,
+            f"Beam Designer — Calculation Sheet — {result.section_name}",
+            fontsize=16,
+            fontweight="bold",
+            va="top",
+        )
+        summary = (
+            f"Span: {result.span_ft:.2f} ft    "
+            f"Ra: {result.reaction_a_kip:.2f} kip    "
+            f"Rb: {result.reaction_b_kip:.2f} kip\n"
+            f"Max shear: {result.maximum_shear_kip:.2f} kip    "
+            f"Max moment: {result.maximum_moment_kip_ft:.2f} kip-ft\n"
+            f"Max deflection: {result.maximum_deflection_in:.3f} in at "
+            f"{result.max_deflection_at_ft:.2f} ft    "
+            f"Limit: {result.deflection_limit_in:.3f} in (L/360): {deflection_status}\n"
+            f"Max bending stress: {result.maximum_bending_stress_ksi:.2f} ksi    "
+            f"Allowable: {result.allowable_stress_ksi:.2f} ksi: {bending_status}"
+        )
+        title_ax.text(0, 0.68, summary, fontsize=9.5, va="top", linespacing=1.5)
+
+        beam_ax = figure.add_subplot(grid[1, 0])
+        beam_ax.set_title("Beam and loads")
+        beam_ax.plot([0, result.span_ft], [0, 0], color="#173d5c", linewidth=7)
+        beam_ax.plot([0, 0], [-0.08, 0], color="#536575", linewidth=1.5)
+        beam_ax.plot([result.span_ft, result.span_ft], [-0.08, 0], color="#536575", linewidth=1.5)
+        beam_ax.plot(
+            [-0.02 * result.span_ft, 0, 0.02 * result.span_ft],
+            [-0.08, 0, -0.08],
+            color="#536575",
+        )
+        beam_ax.plot(
+            [result.span_ft * 0.98, result.span_ft, result.span_ft * 1.02],
+            [-0.08, 0, -0.08],
+            color="#536575",
+        )
+        for load in result.loads:
+            if isinstance(load, PointLoad):
+                beam_ax.annotate(
+                    "",
+                    xy=(load.position_ft, 0),
+                    xytext=(load.position_ft, 0.55),
+                    arrowprops={"arrowstyle": "-|>", "color": "#a34832", "lw": 1.5},
+                )
+                beam_ax.text(
+                    load.position_ft,
+                    0.62,
+                    f"{load.magnitude_kip:.2f} kip",
+                    ha="center",
+                    va="bottom",
+                    fontsize=8,
+                    color="#793723",
+                )
+            else:
+                beam_ax.annotate(
+                    "",
+                    xy=((load.start_ft + load.end_ft) / 2, 0),
+                    xytext=((load.start_ft + load.end_ft) / 2, 0.55),
+                    arrowprops={"arrowstyle": "-|>", "color": "#a34832", "lw": 1.5},
+                )
+                beam_ax.text(
+                    (load.start_ft + load.end_ft) / 2,
+                    0.62,
+                    f"{load.magnitude_kip_ft:.2f} kip/ft",
+                    ha="center",
+                    va="bottom",
+                    fontsize=8,
+                    color="#793723",
+                )
+        beam_ax.set_xlim(-0.05 * result.span_ft, 1.05 * result.span_ft)
+        beam_ax.set_ylim(-0.12, 0.75)
+        beam_ax.set_xlabel("Position (ft)")
+        beam_ax.set_yticks([])
+
+        shear_ax = figure.add_subplot(grid[1, 1])
+        self.add_pdf_curve(shear_ax, result.shear_curve, "Position (ft)", "Shear (kip)", "Shear diagram")
+
+        moment_ax = figure.add_subplot(grid[2, 0])
+        self.add_pdf_curve(moment_ax, result.moment_curve, "Position (ft)", "Moment (kip-ft)", "Moment diagram")
+
+        deflection_ax = figure.add_subplot(grid[2, 1])
+        self.add_pdf_curve(deflection_ax, result.deflection_curve, "Position (ft)", "Deflection (in)", "Deflection diagram")
+
+        figure.text(
+            0.07,
+            0.025,
+            "Educational tool only. Not a substitute for code-compliant design or qualified professional review.",
+            fontsize=8,
+            color="#536575",
+        )
+
+        try:
+            with PdfPages(path) as pdf:
+                pdf.savefig(figure)
+        except (OSError, ImportError) as exc:
+            messagebox.showerror("Export PDF", f"Could not export the PDF:\n{exc}")
+
+    def add_pdf_curve(self, axis, points, x_label, y_label, title):
+        xs = [point[0] for point in points]
+        ys = [point[1] for point in points]
+        axis.axhline(0, color="#8c9aa6", linewidth=0.8)
+        axis.plot(xs, ys, color="#176c9c", linewidth=1.8)
+        axis.fill_between(xs, ys, 0, color="#176c9c", alpha=0.08)
+        axis.set_title(title)
+        axis.set_xlabel(x_label)
+        axis.set_ylabel(y_label)
+        axis.grid(True, alpha=0.2)
 
     def redraw_canvas(self, canvas, kind):
         if not self.result:

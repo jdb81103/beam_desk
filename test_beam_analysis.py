@@ -42,6 +42,21 @@ class BeamAnalysisTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "inside the span"):
             calculate_beam(make_input(loads=(PointLoad(10, 20),)))
 
+    def test_custom_deflection_limit(self):
+        data = BeamInput(
+            span_ft=20,
+            section_name="W12x26",
+            modulus_ksi=29000,
+            inertia_in4=204,
+            section_modulus_in3=33.4,
+            allowable_stress_ksi=24,
+            loads=(UniformLoad(1, 0, 20),),
+            deflection_limit_in=0.5,
+        )
+        result = calculate_beam(data)
+        self.assertEqual(result.deflection_limit_in, 0.5)
+        self.assertFalse(result.deflection_passes)
+
 
 if __name__ == "__main__":
     unittest.main()
