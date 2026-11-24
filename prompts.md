@@ -4,3 +4,4 @@
 - Add save/open and CSV/PDF export features one at a time. Added the Save/Open project feature with JSON serialization and support-type and deflection-limit inputs; verification passed.
 - Add CSV export for beam response values. Added an Export results to CSV button and CSV/File-menu export with x, shear, moment, and deflection columns; verification passed.
 - Add an engineer-ready PDF calculation sheet export. Added PDF/File-menu export with the beam summary and shear, moment, deflection, and load diagrams; verification passed.
+- Rerun the validation cases in spec.md and confirm they still pass. Re-ran all 5 tests and printed all 3 documented load cases; reactions, shear, and moments matched hand calculations, with the center-point moment determined to be 50 kip-ft rather than the spec's 25 kip-ft. No source specification change was made.

@@ -30,6 +30,7 @@ class BeamAnalysisTests(unittest.TestCase):
         self.assertAlmostEqual(result.reaction_b_kip, 5, places=6)
         self.assertAlmostEqual(result.maximum_shear_kip, 5, places=6)
         self.assertAlmostEqual(result.maximum_moment_kip_ft, 50, places=6)
+        self.assertAlmostEqual(result.maximum_deflection_in, 0.487, places=2)
 
     def test_partial_uniform_load(self):
         result = calculate_beam(make_input(loads=(UniformLoad(1, 5, 15),)))
