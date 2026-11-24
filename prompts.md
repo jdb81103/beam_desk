@@ -2,3 +2,4 @@
 - Update spec.md to describe a Python desktop app using Tkinter. Replaced the specification with a Tkinter desktop application spec; worked successfully.
 - Build the Tkinter desktop app described by spec.md using index.html as the behavior reference. Added beam_analysis.py, app.py, and analysis tests; core tests pass.
 - Add save/open and CSV/PDF export features one at a time. Added the Save/Open project feature with JSON serialization and support-type and deflection-limit inputs; verification passed.
+- Add CSV export for beam response values. Added an Export results to CSV button and CSV/File-menu export with x, shear, moment, and deflection columns; verification passed.

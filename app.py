@@ -1,3 +1,4 @@
+import csv
 import json
 from pathlib import Path
 import tkinter as tk
@@ -94,6 +95,8 @@ class BeamDesignerApp(tk.Tk):
         file_menu.add_command(label="Save", accelerator="Ctrl+S", command=self.save_project)
         file_menu.add_command(label="Open...", accelerator="Ctrl+O", command=self.open_project)
         file_menu.add_separator()
+        file_menu.add_command(label="Export CSV...", command=self.export_csv)
+        file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.destroy)
         menu_bar.add_cascade(label="File", menu=file_menu)
         self.configure(menu=menu_bar)
@@ -139,6 +142,9 @@ class BeamDesignerApp(tk.Tk):
         actions.grid(row=12, column=0, columnspan=2, sticky="ew", pady=(8, 4))
         ttk.Button(actions, text="Add point load", command=lambda: self.add_point_load()).pack(side="left", padx=(0, 6))
         ttk.Button(actions, text="Add uniform load", command=lambda: self.add_uniform_load("1", "0", "")).pack(side="left")
+        ttk.Button(self.inputs_frame, text="Export results to CSV", command=self.export_csv).grid(
+            row=16, column=0, columnspan=2, sticky="ew", pady=(8, 0)
+        )
 
         ttk.Label(
             self.inputs_frame,
@@ -385,6 +391,45 @@ class BeamDesignerApp(tk.Tk):
         )
         for kind, canvas in self.canvases:
             self.redraw_canvas(canvas, kind)
+
+    def export_csv(self):
+        if not self.result:
+            messagebox.showwarning("Export CSV", "Calculate a beam response before exporting.")
+            return
+        path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=(("CSV file", "*.csv"), ("All files", "*.*")),
+            title="Export Beam Results",
+        )
+        if not path:
+            return
+
+        def interpolate(points, x_ft):
+            if x_ft <= points[0][0]:
+                return points[0][1]
+            if x_ft >= points[-1][0]:
+                return points[-1][1]
+            for (x1, y1), (x2, y2) in zip(points, points[1:]):
+                if x1 <= x_ft <= x2:
+                    fraction = (x_ft - x1) / (x2 - x1) if x2 != x1 else 0
+                    return y1 + fraction * (y2 - y1)
+            return 0.0
+
+        try:
+            with open(path, "w", newline="", encoding="utf-8-sig") as csv_file:
+                writer = csv.writer(csv_file)
+                writer.writerow(["x_ft", "V_kip", "M_kip_ft", "deflection_in"])
+                steps = 320
+                for index in range(steps + 1):
+                    x_ft = self.result.span_ft * index / steps
+                    writer.writerow([
+                        f"{x_ft:.6f}",
+                        f"{interpolate(self.result.shear_curve, x_ft):.6f}",
+                        f"{interpolate(self.result.moment_curve, x_ft):.6f}",
+                        f"{interpolate(self.result.deflection_curve, x_ft):.9f}",
+                    ])
+        except OSError as exc:
+            messagebox.showerror("Export CSV", f"Could not export the CSV:\n{exc}")
 
     def redraw_canvas(self, canvas, kind):
         if not self.result:
