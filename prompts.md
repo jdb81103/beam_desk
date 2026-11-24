@@ -1,2 +1,3 @@
 - Create the top-level AGENTS.md with the two specified instructions, add this prompt to prompts.md, and commit all changes. Created AGENTS.md and prompts.md; committed successfully.
 - Update spec.md to describe a Python desktop app using Tkinter. Replaced the specification with a Tkinter desktop application spec; worked successfully.
+- Build the Tkinter desktop app described by spec.md using index.html as the behavior reference. Added beam_analysis.py, app.py, and analysis tests; core tests pass.
