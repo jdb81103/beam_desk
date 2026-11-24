@@ -6,3 +6,4 @@
 - Add an engineer-ready PDF calculation sheet export. Added PDF/File-menu export with the beam summary and shear, moment, deflection, and load diagrams; verification passed.
 - Rerun the validation cases in spec.md and confirm they still pass. Re-ran all 5 tests and printed all 3 documented load cases; reactions, shear, and moments matched hand calculations, with the center-point moment determined to be 50 kip-ft rather than the spec's 25 kip-ft. No source specification change was made.
 - Write a short README.md describing the app, package installation, and start command. Added README.md with Matplotlib installation instructions and python app.py startup command; committed successfully.
+- Clean up generated and cache files. Requested removal of generated/cache files; none were present, and no project files were removed.
