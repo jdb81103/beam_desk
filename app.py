@@ -1,5 +1,7 @@
+import json
+from pathlib import Path
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, filedialog, messagebox
 
 from beam_analysis import BeamInput, PointLoad, UniformLoad, calculate_beam
 
@@ -67,6 +69,8 @@ class BeamDesignerApp(tk.Tk):
         self.configure(padx=12, pady=12)
 
         self.load_rows: list[LoadRow] = []
+        self.project_path: str | None = None
+        self.create_menu()
 
         self.columnconfigure(0, weight=0)
         self.columnconfigure(1, weight=1)
@@ -84,6 +88,18 @@ class BeamDesignerApp(tk.Tk):
         self.add_uniform_load("1", "0", "20")
         self.calculate()
 
+    def create_menu(self):
+        menu_bar = tk.Menu(self)
+        file_menu = tk.Menu(menu_bar, tearoff=False)
+        file_menu.add_command(label="Save", accelerator="Ctrl+S", command=self.save_project)
+        file_menu.add_command(label="Open...", accelerator="Ctrl+O", command=self.open_project)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.destroy)
+        menu_bar.add_cascade(label="File", menu=file_menu)
+        self.configure(menu=menu_bar)
+        self.bind("<Control-s>", lambda _event: self.save_project())
+        self.bind("<Control-o>", lambda _event: self.open_project())
+
     def create_inputs(self):
         fields = (
             ("span", "Span (ft)", "20"),
@@ -92,6 +108,7 @@ class BeamDesignerApp(tk.Tk):
             ("inertia", "Ix (in^4)", "204"),
             ("section_modulus", "Sx (in^3)", "33.4"),
             ("allowable_stress", "Fb allowable (ksi)", "24"),
+            ("deflection_limit", "Deflection limit (in)", "0.667"),
         )
         self.field_vars = {}
         for index, (name, label, value) in enumerate(fields):
@@ -104,12 +121,22 @@ class BeamDesignerApp(tk.Tk):
                 row=row * 2 + 1, column=column, sticky="ew", padx=4
             )
 
-        ttk.Label(self.inputs_frame, text="Loads").grid(row=6, column=0, columnspan=2, sticky="w", pady=(12, 4))
+        ttk.Label(self.inputs_frame, text="Support type").grid(row=8, column=0, sticky="w", padx=4, pady=(6, 1))
+        self.support_var = tk.StringVar(value="Simply supported")
+        ttk.Combobox(
+            self.inputs_frame,
+            textvariable=self.support_var,
+            values=("Simply supported",),
+            state="readonly",
+            width=20,
+        ).grid(row=9, column=0, columnspan=2, sticky="w", padx=4)
+
+        ttk.Label(self.inputs_frame, text="Loads").grid(row=10, column=0, columnspan=2, sticky="w", pady=(12, 4))
         self.loads_container = ttk.Frame(self.inputs_frame)
-        self.loads_container.grid(row=7, column=0, columnspan=2, sticky="ew")
+        self.loads_container.grid(row=11, column=0, columnspan=2, sticky="ew")
 
         actions = ttk.Frame(self.inputs_frame)
-        actions.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(8, 4))
+        actions.grid(row=12, column=0, columnspan=2, sticky="ew", pady=(8, 4))
         ttk.Button(actions, text="Add point load", command=lambda: self.add_point_load()).pack(side="left", padx=(0, 6))
         ttk.Button(actions, text="Add uniform load", command=lambda: self.add_uniform_load("1", "0", "")).pack(side="left")
 
@@ -117,14 +144,14 @@ class BeamDesignerApp(tk.Tk):
             self.inputs_frame,
             text="Load magnitudes are positive downward. Locations are measured\nfrom the left support.",
             wraplength=330,
-        ).grid(row=9, column=0, columnspan=2, sticky="w", pady=(6, 8))
+        ).grid(row=13, column=0, columnspan=2, sticky="w", pady=(6, 8))
 
         ttk.Button(self.inputs_frame, text="Calculate beam response", command=self.calculate).grid(
-            row=10, column=0, columnspan=2, sticky="ew", pady=(4, 0)
+            row=14, column=0, columnspan=2, sticky="ew", pady=(4, 0)
         )
         self.error_var = tk.StringVar(value="")
         ttk.Label(self.inputs_frame, textvariable=self.error_var, foreground="#842b2b", wraplength=330).grid(
-            row=11, column=0, columnspan=2, sticky="w", pady=(8, 0)
+            row=15, column=0, columnspan=2, sticky="w", pady=(8, 0)
         )
 
     def create_results(self):
@@ -215,9 +242,118 @@ class BeamDesignerApp(tk.Tk):
                 section_modulus_in3=float(self.field_vars["section_modulus"].get()),
                 allowable_stress_ksi=float(self.field_vars["allowable_stress"].get()),
                 loads=tuple(row.read() for row in self.load_rows),
+                support_type=self.support_var.get(),
+                deflection_limit_in=float(self.field_vars["deflection_limit"].get()),
             )
         except ValueError as exc:
             raise ValueError("Enter valid numeric values for all fields.") from exc
+
+    def save_project(self):
+        if self.project_path:
+            path = self.project_path
+        else:
+            path = filedialog.asksaveasfilename(
+                defaultextension=".beam.json",
+                filetypes=(("Beam Designer project", "*.beam.json"), ("JSON files", "*.json"), ("All files", "*.*")),
+                title="Save Beam",
+            )
+        if not path:
+            return
+        try:
+            data = self.read_inputs()
+            project = {
+                "version": 1,
+                "support_type": data.support_type,
+                "span_ft": data.span_ft,
+                "section_name": data.section_name,
+                "modulus_ksi": data.modulus_ksi,
+                "inertia_in4": data.inertia_in4,
+                "section_modulus_in3": data.section_modulus_in3,
+                "allowable_stress_ksi": data.allowable_stress_ksi,
+                "deflection_limit_in": data.deflection_limit_in,
+                "loads": [],
+            }
+            for load in data.loads:
+                if isinstance(load, PointLoad):
+                    project["loads"].append({
+                        "type": "point",
+                        "magnitude": load.magnitude_kip,
+                        "start": load.position_ft,
+                    })
+                else:
+                    project["loads"].append({
+                        "type": "uniform",
+                        "magnitude": load.magnitude_kip_ft,
+                        "start": load.start_ft,
+                        "end": load.end_ft,
+                    })
+            Path(path).write_text(json.dumps(project, indent=2), encoding="utf-8")
+            self.project_path = path
+            self.title(f"Beam Designer - {Path(path).name}")
+        except (ValueError, OSError) as exc:
+            messagebox.showerror("Save Beam", f"Could not save the beam:\n{exc}")
+
+    def open_project(self):
+        path = filedialog.askopenfilename(
+            filetypes=(("Beam Designer project", "*.beam.json"), ("JSON files", "*.json"), ("All files", "*.*")),
+            title="Open Beam",
+        )
+        if not path:
+            return
+        try:
+            project = json.loads(Path(path).read_text(encoding="utf-8"))
+            values = (
+                ("span", "span_ft"),
+                ("section_name", "section_name"),
+                ("modulus", "modulus_ksi"),
+                ("inertia", "inertia_in4"),
+                ("section_modulus", "section_modulus_in3"),
+                ("allowable_stress", "allowable_stress_ksi"),
+                ("deflection_limit", "deflection_limit_in"),
+            )
+            for field_name, key in values:
+                value = project.get(key)
+                if value is not None:
+                    self.field_vars[field_name].set(str(value))
+            support_type = project.get("support_type", "Simply supported")
+            if support_type not in ("Simply supported",):
+                raise ValueError("The saved beam uses an unsupported support type.")
+            self.support_var.set(support_type)
+
+            for row in list(self.load_rows):
+                row.destroy()
+            self.load_rows = []
+            for load in project.get("loads", []):
+                if load.get("type") == "point":
+                    self.add_point_load_from_values(load["magnitude"], load["start"])
+                elif load.get("type") == "uniform":
+                    self.add_uniform_load(
+                        str(load["magnitude"]),
+                        str(load["start"]),
+                        str(load["end"]),
+                    )
+                else:
+                    raise ValueError("The project contains an unsupported load type.")
+            if not self.load_rows:
+                raise ValueError("The project contains no loads.")
+
+            self.project_path = path
+            self.title(f"Beam Designer - {Path(path).name}")
+            self.calculate()
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError, OSError) as exc:
+            messagebox.showerror("Open Beam", f"Could not open the beam:\n{exc}")
+
+    def add_point_load_from_values(self, magnitude, start):
+        row = LoadRow(
+            self.loads_container,
+            self.refresh_load_layout,
+            "Point",
+            str(magnitude),
+            str(start),
+            "",
+        )
+        row.pack(fill="x", pady=3)
+        self.load_rows.append(row)
 
     def calculate(self):
         self.error_var.set("")

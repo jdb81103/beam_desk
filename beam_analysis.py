@@ -28,6 +28,8 @@ class BeamInput:
     section_modulus_in3: float
     allowable_stress_ksi: float
     loads: tuple[Load, ...]
+    support_type: str = "Simply supported"
+    deflection_limit_in: float | None = None
 
 
 @dataclass(frozen=True)
@@ -190,7 +192,11 @@ def calculate_beam(data: BeamInput) -> BeamResult:
 
     maximum_deflection, max_deflection_at_in = maximum_absolute(deflection_at, span_in)
     maximum_bending_stress = max_moment_kip_in / section_modulus_in3
-    deflection_limit = span_in / 360
+    deflection_limit = (
+        positive(data.deflection_limit_in, "Deflection limit")
+        if data.deflection_limit_in is not None
+        else span_in / 360
+    )
 
     def sample_curve(
         fn: Callable[[float], float],
