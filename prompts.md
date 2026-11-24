@@ -1,1 +1,2 @@
 - Create the top-level AGENTS.md with the two specified instructions, add this prompt to prompts.md, and commit all changes. Created AGENTS.md and prompts.md; committed successfully.
+- Update spec.md to describe a Python desktop app using Tkinter. Replaced the specification with a Tkinter desktop application spec; worked successfully.
